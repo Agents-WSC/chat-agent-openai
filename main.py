@@ -1,56 +1,74 @@
-# === openai-basic-conversational-agent ===
-# A basic LLM-powered conversational agent using OpenAI's GPT API.
-# Now configured to load settings from config.yaml
-
-import openai
 import yaml
+import openai
+import re
+from memory import Memory
+from tools import handle_action  # 👈 Ahora importamos herramientas externas
 
 # === LOAD CONFIGURATION ===
 with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
 api_key = config["openai"]["api_key"]
-model = config["openai"].get("model", "gpt-4")
+model = config["openai"].get("model", "gpt-3.5-turbo")
 system_prompt_text = config["agent"]["system_prompt"]
 memory_limit = config["agent"].get("memory_limit", 50)
 
-# === MEMORY MODULE ===
-# Holds the conversation history and trims it when needed
-conversation_history = []
+# === SETUP OPENAI CLIENT ===
+client = openai.OpenAI(api_key=api_key)
+
+# === INITIALIZE MEMORY MODULE ===
+memory = Memory(limit=memory_limit)
 
 # === AGENT CONTROLLER ===
-# Manages interaction flow and message construction
 def call_agent(user_input):
-    global conversation_history
+    memory.append("user", user_input, type="message")
+    messages = memory.get_messages(system_prompt_text)
 
-    openai.api_key = api_key
-    conversation_history.append({"role": "user", "content": user_input})
-
-    # Trim memory if it exceeds the defined limit
-    if len(conversation_history) > memory_limit:
-        conversation_history = conversation_history[-memory_limit:]
-
-    system_prompt = {"role": "system", "content": system_prompt_text}
-    messages = [system_prompt] + conversation_history
-
-    # === REASONING CORE ===
-    response = openai.ChatCompletion.create(
+    # Step 1: Get initial response with reasoning
+    response = client.chat.completions.create(
         model=model,
         messages=messages
     )
+    content = response.choices[0].message.content
 
-    content = response['choices'][0]['message']['content']
-    conversation_history.append({"role": "assistant", "content": content})
+    # Step 2: Detect if there is an Action
+    match = re.search(r'Action:\s*(.*)', content)
+    observation = "none"
+
+    if match:
+        action = match.group(1).strip()
+        if action.lower() != "none":
+            observation = handle_action(action)
+
+            # Step 3: Build second message with observation
+            messages.append({"role": "assistant", "content": content})
+            messages.append({"role": "user", "content": f"Observation: {observation}"})
+
+            # Save the reasoning step separately
+            memory.append("assistant", content, type="reasoning")
+
+            follow_up = client.chat.completions.create(
+                model=model,
+                messages=messages
+            )
+            content = follow_up.choices[0].message.content
+
+    # Save final answer
+    memory.append("assistant", content, type="final")
     return content
 
 # === INTERFACE LAYER ===
-# Simple CLI interface for chatting
 if __name__ == "__main__":
-    print("Type 'exit' to end the conversation.")
+    print("Type 'exit' or 'reset' to end or restart the conversation.\n")
 
     while True:
         user_input = input("You: ")
-        if user_input.lower() in ["exit", "quit"]:
+        if user_input.lower() == "exit":
             break
+        elif user_input.lower() == "reset":
+            memory.reset()
+            print("🔄 Memory reset.\n")
+            continue
+
         response = call_agent(user_input)
-        print("Agent:", response)
+        print("Agent:\n" + response + "\n")
