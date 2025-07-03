@@ -2,12 +2,18 @@ import re
 
 # === TOOL FUNCTIONS ===
 
-def calculator(expression: str) -> str:
-    """Evaluate basic math expressions like 2 * (3 + 4)."""
+def calculator(expression: str) -> dict:
+    """
+    Evaluate basic math expressions like 2 * (3 + 4).
+
+    Returns:
+        dict: {"result": str, "error": str or None}
+    """
     try:
-        return str(eval(expression, {"__builtins__": {}}))
+        result = str(eval(expression, {"__builtins__": {}}))
+        return {"result": result, "error": None}
     except Exception as e:
-        return f"Error: {str(e)}"
+        return {"result": None, "error": str(e)}
 
 # === TOOL REGISTRY ===
 
@@ -17,17 +23,18 @@ TOOLS = {
 
 # === ACTION HANDLER ===
 
-def handle_action(action_str: str) -> str:
+def handle_action(action_str: str) -> dict:
     """
-    Extract the tool name and argument from the action string
-    and execute the corresponding function.
-    Example: action_str = "calculator(2 * (3 + 4))"
+    Parse the action string and invoke the appropriate tool.
+
+    Returns:
+        dict: {"result": str or None, "error": str or None}
     """
-    for name, func in TOOLS.items():
-        if action_str.startswith(f"{name}("):
-            match = re.search(rf'{name}\((.*)\)', action_str)
-            if match:
-                argument = match.group(1)
-                return func(argument)
-    return "Tool not implemented."
-    
+    try:
+        if "calculator(" in action_str:
+            expr = re.search(r'calculator\((.*)\)', action_str)
+            if expr:
+                return calculator(expr.group(1))
+        return {"result": "Tool not implemented.", "error": None}
+    except Exception as e:
+        return {"result": None, "error": str(e)}
