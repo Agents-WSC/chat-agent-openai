@@ -71,8 +71,9 @@ Final Answer: The result is 6.
    ```yaml
    openai:
      api_key: "sk-..."
-     model: "gpt-3.5-turbo"
+     model: "gpt-4o"
    agent:
+     system_prompt_path: system_prompt.txt
      memory_limit: 100
    ```
 
