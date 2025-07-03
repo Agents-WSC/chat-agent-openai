@@ -64,7 +64,7 @@ Final Answer: The result is 6.
 
 2. Install dependencies:
    ```bash
-   pip install openai pyyaml
+   pip install -r requirements.txt
    ```
 
 3. Create a `config.yaml`:
